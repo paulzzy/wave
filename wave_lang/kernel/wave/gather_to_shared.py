@@ -39,6 +39,7 @@ from .utils.general_utils import (
     ceildiv,
     delinearize_index,
     get_hardware_constraint,
+    infer_dim,
     remove_thread_indexing,
     find_index_bounds,
 )
@@ -216,13 +217,17 @@ def emit_global_to_lds(
         write_index = {}
         for dim, idx in zip(symbolic_shape, nd_index):
             last = dim == symbolic_shape[-1]
+            dim = infer_dim(dim)
 
             idx = idx * elements_per_thread if last else idx
             size = elements_per_thread if last else 1
             stride = 1
             write_index[dim] = IndexSequence(idx, size, stride)
 
-        read_index = combine_index(global_index, write_index)
+        try:
+            read_index = combine_index(global_index, write_index)
+        except:
+            breakpoint()
 
         # GatherToLDS only uses write index from the first thread in wave,
         # so make the index wave-uniform, simplifying the calculation.
