@@ -39,7 +39,9 @@ from .utils.general_utils import (
     ceildiv,
     delinearize_index,
     get_hardware_constraint,
+    infer_dim,
     remove_thread_indexing,
+    find_index_bounds,
 )
 from .utils.graph_utils import DCE
 from .utils.symbol_utils import subs_idxc
@@ -103,10 +105,12 @@ def get_gather_to_shared_config(
     element_type: "DataType",
     supported_load_widths: list[int],
     hardware_constraint: "HardwareConstraint",
+    fastest_dim_bound: Optional[IndexExpr],
 ) -> Optional[GatherToSharedConfig]:
     """
     Get the gather to shared config for the given read and write.
     """
+    logger.info(f"fastest_dim_bound={fastest_dim_bound}")
 
     bitwidth = element_type.bitwidth()
     logger.info(f"element_type={element_type}, bitwidth={bitwidth}")
@@ -134,9 +138,18 @@ def get_gather_to_shared_config(
     logger.info(f"elements_per_thread={elements_per_thread}")
 
     vector_width = elements_per_thread * bitwidth
-    load_width = get_load_width(supported_load_widths, vector_width)
+    if fastest_dim_bound is not None:
+        fastest_dim_bound = fastest_dim_bound * bitwidth
+
+    # `vector_width` is the the vector size each thread loads.
+    # `fastest_dim_bound` is the bound against which we are checking our loads,
+    # it is larger than `vector_width` but it must be aligned with chosen load width.
+    load_width = get_load_width(supported_load_widths, vector_width, fastest_dim_bound)
     if load_width is None:
-        logger.error(f"No supported load width found for bitwidth={vector_width}")
+        logger.info(
+            f"No supported load width found for width={vector_width}, "
+            f"fastest_dim_bound={subs_idxc(fastest_dim_bound)}"
+        )
         return None
 
     logger.info(f"load_width={load_width}")
@@ -171,6 +184,7 @@ def emit_global_to_lds(
     total_number_of_threads: int,
     thread_id: IndexExpr,
     symbolic_shape: list[IndexSymbol],
+    bounds: dict[IndexSymbol, IndexExpr],
     wave_subs: dict[IndexSymbol, IndexExpr],
     element_type: "DataType",
 ) -> defaultdict[fx.Node, list[Write]]:
@@ -201,8 +215,9 @@ def emit_global_to_lds(
         nd_index = delinearize_index(thread_id_adjusted, materialized_shape_adjusted)
         logger.info(f"nd_index={nd_index}")
         write_index = {}
-        for dim, idx in zip(symbolic_shape, nd_index):
-            last = dim == symbolic_shape[-1]
+        for bound_expr, idx in zip(symbolic_shape, nd_index):
+            last = bound_expr == symbolic_shape[-1]
+            dim = infer_dim(bound_expr)
 
             idx = idx * elements_per_thread if last else idx
             size = elements_per_thread if last else 1
@@ -227,6 +242,7 @@ def emit_global_to_lds(
                 elements_per_thread,
                 read.mapping,
                 write.mapping,
+                bounds,
             ).add_to_graph(write.graph)
 
             new_writes[write.memory].append(new_write)
@@ -244,13 +260,25 @@ def emit_global_to_lds(
     return new_writes
 
 
-def get_load_width(supported_load_widths: list[int], bitwidth: int) -> Optional[int]:
+def get_load_width(
+    supported_load_widths: list[int],
+    target_width: int,
+    fastest_dim_bound: Optional[IndexExpr],
+) -> Optional[int]:
     """
     Get the largest suitable load width for the given bitwidth.
     """
     for width in supported_load_widths[::-1]:
-        if bitwidth % width == 0:
-            return width
+        if target_width % width != 0:
+            continue
+
+        if fastest_dim_bound is not None:
+            # `subs_idxc` can return symbolic values which will also be != 0,
+            # so we need to check `not (subs_idxc(...) == 0)`.
+            if not (subs_idxc(fastest_dim_bound % width) == 0):
+                continue
+
+        return width
 
     return None
 
@@ -330,6 +358,18 @@ def gather_to_shared(
 
         element_type = read.type.dtype
 
+        symbolic_shape = read.type.symbolic_shape
+        if read.bounds:
+            bounds = read.bounds
+        else:
+            vector_shapes = read.vector_shapes or hardware_constraint.vector_shapes
+            bounds = find_index_bounds(
+                constraints, read.index, vector_shapes, symbolic_shape
+            )
+
+        logger.info(f"bounds={bounds}")
+        fastest_dim_bound = bounds.get(symbolic_shape[-1], None) if bounds else None
+
         config = get_gather_to_shared_config(
             read,
             constraint_tile_size,
@@ -337,6 +377,7 @@ def gather_to_shared(
             element_type,
             supported_load_widths,
             hardware_constraint,
+            fastest_dim_bound,
         )
 
         if config is None:
@@ -355,7 +396,8 @@ def gather_to_shared(
             expected_number_of_loads,
             total_number_of_threads,
             thread_id,
-            read.type.symbolic_shape,
+            symbolic_shape,
+            bounds,
             wave_subs,
             element_type,
         )

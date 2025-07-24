@@ -172,19 +172,30 @@ def testPureGemm(
 _xfail = lambda *a: pytest.param(*a, marks=pytest.mark.xfail)
 
 
+_global_to_lds_shapes = [(17, 23, 32), (15, 13, 4)]
+
+
 @require_e2e
 @require_cdna_3_or_4
-@pytest.mark.parametrize("shape", get_test_shapes("test_gemm"))
+@pytest.mark.parametrize(
+    "shape", _global_to_lds_shapes + get_test_shapes("test_gemm")[:1]
+)
 @pytest.mark.parametrize(
     "enable_scheduling",
     [
         SchedulingType.NONE,
-        _xfail(SchedulingType.PREFETCH),
+        SchedulingType.PREFETCH,
         _xfail(SchedulingType.MODULO),
         _xfail(SchedulingType.MODULO_MULTI_BUFFERED),
     ],
 )
-@param_bool("dynamic_dims", "dyn")
+@pytest.mark.parametrize(
+    "dynamic_dims",
+    [
+        (False, False, False),
+        (True, True, False),
+    ],
+)
 @pytest.mark.parametrize(
     "mfma_variant",
     [
@@ -196,7 +207,7 @@ _xfail = lambda *a: pytest.param(*a, marks=pytest.mark.xfail)
 def testGemmGatherToLDS(
     shape: tuple[int],
     enable_scheduling: SchedulingType,
-    dynamic_dims: bool,
+    dynamic_dims: tuple[bool, bool, bool],
     mfma_variant: MMAType,
     datatype: torch.dtype,
     run_bench,
@@ -225,6 +236,7 @@ def testGemmGatherToLDS(
     b = device_randn(shape[1], shape[2], dtype=datatype)
     c = device_zeros(shape[0], shape[1], dtype=torch.float32)
     asm = gemm(a, b, c)
+
     assert "amdgpu.gather_to_lds" in asm, "gather_to_lds not found in asm"
 
     if run_bench:
