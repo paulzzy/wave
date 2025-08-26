@@ -2119,7 +2119,7 @@ class DebugLog(CustomOp):
     Note that the logs collected in the `debug_logs` field, or handled by `printer` or `handler` represent a global view of the log after all writes, not limited to any one wave or loop iteration.
 
     The optional `printer` argument should be a function that accepts a string (the log's `label`) and the value of the log itself (a Torch tensor).
-    A handy value for this is `print`, though note that it will probably print an abbreviated view of the global tensor.
+    The default value for this is `print`, though note that it will probably print an abbreviated view of the global tensor.
 
     The optional `handler` argument should be a function that accepts the whole `debug_logs` object (IE all logs, not just one).
     The handler function gives a way to specify something like a viewer for all logs, but specify it inline among print functions rather than separately.
@@ -2141,7 +2141,7 @@ class DebugLog(CustomOp):
     ] = None
     mapping: Optional[IndexMapping] = None
     mapping_dynamic_vals: tuple[fx.Node, ...] = ()
-    printer: Optional[Callable[[str, Any], Any]] = None
+    printer: Optional[Callable[[str, Any], Any]] = print
     handler: Optional[Callable[[dict[str, Any]], Any]] = None
 
     @property
