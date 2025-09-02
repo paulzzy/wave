@@ -51,6 +51,12 @@ shapes += [(128, 2, 80, 80, 32, 2, 500)]
 shapes += [(128, 2, 512, 512, 32, 32, 500)]
 shapes += [expensive_test_param((32, 8, 128, 128, 32, 1319, 1018))]
 
+# Test whether number of workgroups for query heads is calculated correctly
+#
+# This example requires 2 workgroups, since HEAD_BLOCK_SIZE will be 16 while the
+# number of query heads is 17
+shapes += [(17, 1, 1, 1, 1, 1, 1)]
+
 # Test shapes for MHA paged attention
 # (NUM_HEADS, HEAD_SIZE_QK, HEAD_SIZE_V, BLOCK_SIZE, NUM_SEQS, SEQ_LEN)
 mha_shapes = [(16, 64, 64, 32, 2, 100)]

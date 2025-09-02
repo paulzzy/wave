@@ -158,7 +158,7 @@ def get_paged_decode_attention_kernels(
         # appropriate kv head index.
 
         wg_func_2 = lambda wg: wg // math.ceil(head_ratio / HEAD_BLOCK_SIZE)
-        count = shape.num_query_heads // min(HEAD_BLOCK_SIZE, head_ratio)
+        count = ceildiv(shape.num_query_heads, min(HEAD_BLOCK_SIZE, head_ratio))
         constraints += [
             tkw.WorkgroupConstraint(BH, BLOCK_BH, 1, apply_fn=wg_func_2, iters=count)
         ]
