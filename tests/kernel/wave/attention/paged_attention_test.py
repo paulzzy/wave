@@ -57,6 +57,10 @@ shapes += [expensive_test_param((32, 8, 128, 128, 32, 1319, 1018))]
 # number of query heads is 17
 shapes += [(17, 1, 1, 1, 1, 1, 1)]
 
+# Test KV splits where some splits do no work: [2, 2, 2, 2, 1, 0, 0, 0]
+# Assumes num_kv_splits is 8
+shapes += [(2, 1, 1, 1, 1, 1, 9)]
+
 # Test shapes for MHA paged attention
 # (NUM_HEADS, HEAD_SIZE_QK, HEAD_SIZE_V, BLOCK_SIZE, NUM_SEQS, SEQ_LEN)
 mha_shapes = [(16, 64, 64, 32, 2, 100)]
@@ -281,7 +285,9 @@ def testPagedFlashDecoding(
     )
 
     phase_0_output = device_zeros(phase_0_output_shape, dtype=torch.float32)
-    phase_0_output_max = device_zeros(phase_0_output_max_shape, dtype=torch.float32)
+    phase_0_output_max = device_full(
+        phase_0_output_max_shape, -1e6, dtype=torch.float32
+    )
     output = device_zeros(
         shape.num_seqs, shape.num_query_heads, shape.head_size_kv, dtype=dtype
     )
@@ -445,7 +451,9 @@ def testPagedFlashDecodingMHA(
     )
 
     phase_0_output = device_zeros(phase_0_output_shape, dtype=torch.float32)
-    phase_0_output_max = device_zeros(phase_0_output_max_shape, dtype=torch.float32)
+    phase_0_output_max = device_full(
+        phase_0_output_max_shape, -1e6, dtype=torch.float32
+    )
     output = device_zeros(
         shape.num_seqs, shape.num_query_heads, shape.head_size_kv, dtype=dtype
     )
