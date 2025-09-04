@@ -19,6 +19,7 @@ from wave_lang.kernel.wave.utils.torch_utils import (
     device_randint,
     device_randn,
     device_zeros,
+    device_empty,
 )
 from wave_lang.kernel.wave.compile import WaveCompileOptions, wave_compile
 from wave_lang.kernel.wave.constraints import MMAType, GenericDot, MMAOperand
@@ -284,11 +285,9 @@ def testPagedFlashDecoding(
         get_paged_decode_intermediate_arrays_shapes(shape, num_kv_splits)
     )
 
-    phase_0_output = device_zeros(phase_0_output_shape, dtype=torch.float32)
-    phase_0_output_max = device_full(
-        phase_0_output_max_shape, -1e6, dtype=torch.float32
-    )
-    output = device_zeros(
+    phase_0_output = device_empty(phase_0_output_shape, dtype=torch.float32)
+    phase_0_output_max = device_empty(phase_0_output_max_shape, dtype=torch.float32)
+    output = device_empty(
         shape.num_seqs, shape.num_query_heads, shape.head_size_kv, dtype=dtype
     )
 
@@ -450,11 +449,9 @@ def testPagedFlashDecodingMHA(
         get_paged_decode_intermediate_arrays_shapes(shape, num_kv_splits)
     )
 
-    phase_0_output = device_zeros(phase_0_output_shape, dtype=torch.float32)
-    phase_0_output_max = device_full(
-        phase_0_output_max_shape, -1e6, dtype=torch.float32
-    )
-    output = device_zeros(
+    phase_0_output = device_empty(phase_0_output_shape, dtype=torch.float32)
+    phase_0_output_max = device_empty(phase_0_output_max_shape, dtype=torch.float32)
+    output = device_empty(
         shape.num_seqs, shape.num_query_heads, shape.head_size_kv, dtype=dtype
     )
 
